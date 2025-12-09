@@ -1,0 +1,621 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Gift, Users, Trash2, RotateCcw, PartyPopper, Snowflake, Star, Copy, Check, Spade, Heart, Club, Diamond, Trophy, Play, Ghost, Skull } from 'lucide-react';
+
+// --- 輔助組件區域 ---
+
+// 1. 紙花特效
+const ConfettiCanvas = ({ active }) => {
+  const canvasRef = useRef(null);
+
+  useEffect(() => {
+    if (!active) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const particles = [];
+    const colors = ['#EF4444', '#10B981', '#F59E0B', '#3B82F6', '#FFFFFF'];
+
+    for (let i = 0; i < 150; i++) {
+      particles.push({
+        x: window.innerWidth / 2,
+        y: window.innerHeight / 2,
+        vx: (Math.random() - 0.5) * 20,
+        vy: (Math.random() - 0.5) * 20 - 5,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        size: Math.random() * 8 + 4,
+        gravity: 0.2,
+        drag: 0.96
+      });
+    }
+
+    let animationFrameId;
+    const render = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      particles.forEach((p, index) => {
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += p.gravity;
+        p.vx *= p.drag;
+        p.vy *= p.drag;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+        if (p.y > window.innerHeight) particles.splice(index, 1);
+      });
+      if (particles.length > 0) animationFrameId = requestAnimationFrame(render);
+    };
+    render();
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [active]);
+
+  if (!active) return null;
+  return <canvas ref={canvasRef} className="fixed top-0 left-0 w-full h-full pointer-events-none z-50" />;
+};
+
+// 2. 雪花背景
+const Snowfall = () => (
+  <div className="fixed top-0 left-0 w-full h-full pointer-events-none overflow-hidden z-0">
+    {[...Array(20)].map((_, i) => (
+      <div
+        key={i}
+        className="absolute text-white opacity-30 animate-fall"
+        style={{
+          left: `${Math.random() * 100}%`,
+          top: `-${Math.random() * 20}%`,
+          animationDuration: `${Math.random() * 5 + 5}s`,
+          animationDelay: `${Math.random() * 5}s`,
+          fontSize: `${Math.random() * 20 + 10}px`
+        }}
+      >
+        ❄
+      </div>
+    ))}
+  </div>
+);
+
+// 3. 撲克牌組件 (升級版：支援點擊與翻轉)
+const PlayingCard = ({ card, isFlipped, onClick, disabled, index }) => {
+  const getSuitIcon = (suit) => {
+    switch (suit) {
+      case '♠': return <Spade className="w-4 h-4 md:w-6 md:h-6 fill-current" />;
+      case '♥': return <Heart className="w-4 h-4 md:w-6 md:h-6 fill-current" />;
+      case '♦': return <Diamond className="w-4 h-4 md:w-6 md:h-6 fill-current" />;
+      case '♣': return <Club className="w-4 h-4 md:w-6 md:h-6 fill-current" />;
+      case 'JOKER': return <Ghost className="w-6 h-6 md:w-10 md:h-10 fill-current animate-pulse" />;
+      default: return null;
+    }
+  };
+
+  const isRed = card?.suit === '♥' || card?.suit === '♦';
+  const isJoker = card?.rank === 'JOKER';
+
+  return (
+    <div 
+      onClick={() => !disabled && onClick && onClick(index)}
+      className={`
+        relative w-20 h-32 md:w-28 md:h-44 perspective-1000 cursor-pointer transition-transform duration-300 hover:-translate-y-2
+        ${disabled ? 'cursor-default' : 'hover:scale-105'}
+      `}
+    >
+      <div 
+        className={`
+          w-full h-full relative transition-all duration-700 transform-style-3d shadow-2xl rounded-xl
+          ${isFlipped ? 'rotate-y-180' : ''}
+        `}
+      >
+        {/* 卡背 (Face Down) */}
+        <div 
+          className="absolute w-full h-full backface-hidden rounded-xl border-4 border-white/20 flex items-center justify-center bg-red-900"
+          style={{
+            backgroundImage: 'repeating-linear-gradient(45deg, #7f1d1d 0, #7f1d1d 10px, #991b1b 10px, #991b1b 20px)'
+          }}
+        >
+          <div className="w-12 h-12 rounded-full border-2 border-yellow-500/30 flex items-center justify-center bg-black/20">
+            <Snowflake className="text-yellow-500/50 w-6 h-6" />
+          </div>
+        </div>
+
+        {/* 卡面 (Face Up) */}
+        <div 
+          className={`
+            absolute w-full h-full backface-hidden rotate-y-180 rounded-xl flex flex-col justify-between p-2 md:p-3
+            ${isJoker ? 'bg-gray-900 text-purple-400 border-2 border-purple-500' : 'bg-white ' + (isRed ? 'text-red-600' : 'text-slate-900')}
+          `}
+        >
+          {isJoker ? (
+            // 鬼牌樣式
+            <div className="h-full flex flex-col items-center justify-center gap-2">
+              <span className="text-xs font-bold tracking-widest text-red-500">GHOST</span>
+              <Ghost size={48} className="animate-bounce" />
+              <span className="text-xs font-bold tracking-widest text-red-500">FAIL</span>
+            </div>
+          ) : (
+            // 普通牌樣式
+            <>
+              <div className="flex flex-col items-center leading-none">
+                <span className="text-lg font-bold font-serif">{card.rank}</span>
+                {getSuitIcon(card.suit)}
+              </div>
+              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 opacity-20">
+                 {getSuitIcon(card.suit)}
+              </div>
+              <div className="flex flex-col items-center leading-none rotate-180">
+                <span className="text-lg font-bold font-serif">{card.rank}</span>
+                {getSuitIcon(card.suit)}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// --- 主應用程式 ---
+export default function ChristmasRaffle() {
+  // 遊戲階段: 'poker' (抽鬼牌) | 'raffle' (抽獎)
+  const [gameStage, setGameStage] = useState('poker');
+  
+  // --- 基礎數據狀態 ---
+  const [participants, setParticipants] = useState([
+    '聖誕老公公', '馴鹿魯道夫', '雪人小白', '精靈小綠', '愛莎女王'
+  ]);
+  const [prizes, setPrizes] = useState([
+    'iPhone 17', '神秘大禮包', '星巴克禮券', '巨大的泰迪熊', '溫暖手織圍巾'
+  ]);
+  
+  // --- 抽獎機狀態 ---
+  const [currentParticipant, setCurrentParticipant] = useState('');
+  const [currentPrize, setCurrentPrize] = useState('');
+  const [currentCode, setCurrentCode] = useState('');
+  const [isSpinning, setIsSpinning] = useState(false);
+  const [winners, setWinners] = useState([]);
+  const [showConfetti, setShowConfetti] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [newParticipant, setNewParticipant] = useState('');
+  const [newPrize, setNewPrize] = useState('');
+
+  // --- 抽鬼牌狀態 ---
+  const [pokerCards, setPokerCards] = useState([]); // 當前桌上的4張牌
+  const [flippedIndex, setFlippedIndex] = useState(null); // 翻開的牌索引
+  const [pokerMessage, setPokerMessage] = useState('請從 4 張牌中抽一張 (小心鬼牌！)');
+  const [isProcessing, setIsProcessing] = useState(false); // 是否正在處理動畫
+  const [pokerResult, setPokerResult] = useState(null); // 'win' | 'lose'
+
+  // 初始化撲克牌局 (3張好牌，1張鬼牌)
+  const dealPoker = () => {
+    const suits = ['♠', '♥', '♦', '♣'];
+    const ranks = ['K', 'Q', 'J', '10', 'A'];
+    
+    // 產生 3 張隨機好牌
+    const safeCards = [];
+    for(let i=0; i<3; i++) {
+        const suit = suits[Math.floor(Math.random() * suits.length)];
+        const rank = ranks[Math.floor(Math.random() * ranks.length)];
+        safeCards.push({ suit, rank, type: 'safe' });
+    }
+    
+    // 產生 1 張鬼牌
+    const jokerCard = { suit: 'JOKER', rank: 'JOKER', type: 'ghost' };
+    
+    // 合併並洗牌
+    const deck = [...safeCards, jokerCard].sort(() => Math.random() - 0.5);
+    
+    setPokerCards(deck);
+    setFlippedIndex(null);
+    setPokerResult(null);
+    setPokerMessage('從 4 張牌中抽一張，別抽到鬼牌！');
+    setIsProcessing(false);
+  };
+
+  // 第一次載入時發牌
+  useEffect(() => {
+    dealPoker();
+  }, []);
+
+  // 處理點擊卡片
+  const handleCardClick = (index) => {
+    if (isProcessing || flippedIndex !== null) return;
+    
+    setIsProcessing(true);
+    setFlippedIndex(index);
+    const selectedCard = pokerCards[index];
+
+    if (selectedCard.type === 'ghost') {
+      // 抽到鬼牌 - 失敗
+      setPokerResult('lose');
+      setPokerMessage('哎呀！抽到鬼牌了！👻');
+      setTimeout(() => setIsProcessing(false), 1000); // 允許重試
+    } else {
+      // 抽到好牌 - 勝利
+      setPokerResult('win');
+      setPokerMessage('恭喜過關！準備抽獎！🎉');
+      setShowConfetti(true);
+      setTimeout(() => {
+        setShowConfetti(false);
+        setGameStage('raffle');
+      }, 1500);
+    }
+  };
+
+  // 重試抽鬼牌
+  const retryPoker = () => {
+    dealPoker();
+  };
+
+  // --- 抽獎機邏輯 ---
+  const generateDiscountCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = 'XMAS-';
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const addParticipant = () => {
+    if (newParticipant.trim()) {
+      setParticipants([...participants, newParticipant.trim()]);
+      setNewParticipant('');
+    }
+  };
+
+  const addPrize = () => {
+    if (newPrize.trim()) {
+      setPrizes([...prizes, newPrize.trim()]);
+      setNewPrize('');
+    }
+  };
+
+  const removeParticipant = (index) => {
+    setParticipants(participants.filter((_, i) => i !== index));
+  };
+
+  const removePrize = (index) => {
+    setPrizes(prizes.filter((_, i) => i !== index));
+  };
+
+  const drawWinner = () => {
+    const availableParticipants = participants.filter(
+      p => !winners.some(w => w.participant === p)
+    );
+    const availablePrizes = prizes.filter(
+      p => !winners.some(w => w.prize === p)
+    );
+
+    if (availableParticipants.length === 0 || availablePrizes.length === 0) {
+      alert('名單或禮物不足！');
+      return;
+    }
+
+    setIsSpinning(true);
+    setShowConfetti(false);
+    setCurrentCode('');
+    setCopied(false);
+
+    let counter = 0;
+    const maxCount = 20;
+    
+    const interval = setInterval(() => {
+      const randomP = availableParticipants[Math.floor(Math.random() * availableParticipants.length)];
+      const randomG = availablePrizes[Math.floor(Math.random() * availablePrizes.length)];
+      
+      setCurrentParticipant(randomP);
+      setCurrentPrize(randomG);
+      counter++;
+      
+      if (counter >= maxCount) {
+        clearInterval(interval);
+        
+        const finalParticipant = availableParticipants[Math.floor(Math.random() * availableParticipants.length)];
+        const finalPrize = availablePrizes[Math.floor(Math.random() * availablePrizes.length)];
+        const finalCode = generateDiscountCode();
+        
+        setCurrentParticipant(finalParticipant);
+        setCurrentPrize(finalPrize);
+        setCurrentCode(finalCode);
+        
+        setWinners([{ participant: finalParticipant, prize: finalPrize, code: finalCode }, ...winners]);
+        setIsSpinning(false);
+        setShowConfetti(true);
+        setTimeout(() => setShowConfetti(false), 5000);
+      }
+    }, 100);
+  };
+
+  // 下一位挑戰者 (回到抽鬼牌)
+  const nextChallenger = () => {
+    setGameStage('poker');
+    dealPoker(); // 重新發牌
+    setCurrentParticipant('');
+    setCurrentPrize('');
+    setCurrentCode('');
+    setShowConfetti(false);
+  };
+
+  const resetAll = () => {
+    if (window.confirm('確定要清除所有中獎紀錄並重置遊戲嗎？')) {
+      setWinners([]);
+      nextChallenger();
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-red-900 to-green-900 text-white font-sans overflow-x-hidden relative">
+      <style>{`
+        @keyframes fall {
+          0% { transform: translateY(-10vh) rotate(0deg); }
+          100% { transform: translateY(110vh) rotate(360deg); }
+        }
+        .animate-fall {
+          animation-name: fall;
+          animation-timing-function: linear;
+          animation-iteration-count: infinite;
+        }
+        .christmas-shadow {
+          text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+        .card-glass {
+          background: rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(10px);
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .rotate-y-180 {
+          transform: rotateY(180deg);
+        }
+        .transform-style-3d {
+          transform-style: preserve-3d;
+        }
+        .backface-hidden {
+          backface-visibility: hidden;
+        }
+      `}</style>
+
+      <Snowfall />
+      <ConfettiCanvas active={showConfetti} />
+
+      <div className="container mx-auto px-4 py-6 relative z-10">
+        
+        {/* Header */}
+        <header className="text-center mb-6">
+          <div className="flex justify-center items-center gap-2 mb-2">
+            <Star className="text-yellow-400 w-6 h-6 md:w-8 md:h-8 fill-current animate-pulse" />
+            <h1 className="text-3xl md:text-5xl font-bold text-yellow-300 christmas-shadow font-serif">
+              聖誕生存戰：鬼牌與禮物
+            </h1>
+            <Star className="text-yellow-400 w-6 h-6 md:w-8 md:h-8 fill-current animate-pulse" />
+          </div>
+          <p className="text-red-100 text-sm md:text-base">避開鬼牌，帶走 iPhone 17！</p>
+        </header>
+
+        <main className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          {/* 左側：設定區 (維持不變) */}
+          <div className="lg:col-span-3 space-y-4">
+            <div className="card-glass rounded-xl p-4 shadow-xl">
+              <div className="flex items-center gap-2 mb-3 text-green-300">
+                <Users size={20} />
+                <h2 className="font-bold">參加者 ({participants.length})</h2>
+              </div>
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  value={newParticipant}
+                  onChange={(e) => setNewParticipant(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && addParticipant()}
+                  placeholder="輸入名字..."
+                  className="w-full px-3 py-2 rounded bg-white/20 border border-white/30 text-white placeholder-red-200 focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm"
+                />
+                <button onClick={addParticipant} className="bg-green-600 hover:bg-green-500 text-white px-3 py-1 rounded transition text-xl leading-none">+</button>
+              </div>
+              <ul className="max-h-32 lg:max-h-[30vh] overflow-y-auto space-y-1 custom-scrollbar">
+                {participants.map((p, i) => (
+                  <li key={i} className={`flex justify-between items-center px-2 py-1 rounded ${winners.some(w => w.participant === p) ? 'bg-white/10 opacity-50 decoration-slate-400 line-through' : 'hover:bg-white/10'}`}>
+                    <span className="truncate text-sm">{p}</span>
+                    <button onClick={() => removeParticipant(i)} className="text-red-300 hover:text-red-100"><Trash2 size={14}/></button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div className="card-glass rounded-xl p-4 shadow-xl">
+              <div className="flex items-center gap-2 mb-3 text-yellow-300">
+                <Gift size={20} />
+                <h2 className="font-bold">禮物池 ({prizes.length})</h2>
+              </div>
+              <div className="flex gap-2 mb-3">
+                <input
+                  type="text"
+                  value={newPrize}
+                  onChange={(e) => setNewPrize(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && addPrize()}
+                  placeholder="輸入禮物..."
+                  className="w-full px-3 py-2 rounded bg-white/20 border border-white/30 text-white placeholder-red-200 focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm"
+                />
+                <button onClick={addPrize} className="bg-yellow-600 hover:bg-yellow-500 text-white px-3 py-1 rounded transition text-xl leading-none">+</button>
+              </div>
+              <ul className="max-h-32 lg:max-h-[30vh] overflow-y-auto space-y-1">
+                {prizes.map((p, i) => (
+                  <li key={i} className={`flex justify-between items-center px-2 py-1 rounded ${winners.some(w => w.prize === p) ? 'bg-white/10 opacity-50 decoration-slate-400 line-through' : 'hover:bg-white/10'}`}>
+                    <span className="truncate text-sm">{p}</span>
+                    <button onClick={() => removePrize(i)} className="text-red-300 hover:text-red-100"><Trash2 size={14}/></button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+
+          {/* 中間：遊戲主舞台 */}
+          <div className="lg:col-span-6">
+            <div className="card-glass rounded-2xl p-4 md:p-6 text-center min-h-[500px] flex flex-col justify-center items-center shadow-2xl relative border-2 border-yellow-500/50 overflow-hidden transition-all duration-500">
+              
+              {/* 裝飾 */}
+              <div className="absolute top-4 left-4 text-yellow-400 opacity-50"><Snowflake size={32} /></div>
+              <div className="absolute bottom-4 right-4 text-yellow-400 opacity-50"><Snowflake size={32} /></div>
+
+              {/* STAGE 1: 抽鬼牌遊戲 */}
+              {gameStage === 'poker' && (
+                <div className="w-full h-full flex flex-col items-center justify-center animate-fade-in">
+                   <div className="bg-purple-900/50 rounded-full px-6 py-1 text-purple-200 text-sm font-bold tracking-wider mb-6 border border-purple-500/30 flex items-center gap-2">
+                     <Ghost size={16} /> STAGE 1: 抽鬼牌挑戰
+                   </div>
+                   
+                   {/* 卡牌區 - 4張牌 */}
+                   <div className="flex flex-wrap justify-center items-center gap-4 mb-8">
+                      {pokerCards.map((card, index) => (
+                        <PlayingCard 
+                          key={index}
+                          index={index}
+                          card={card}
+                          isFlipped={flippedIndex === index}
+                          onClick={handleCardClick}
+                          disabled={flippedIndex !== null} // 只要有一張翻開了，其他就不能點
+                        />
+                      ))}
+                   </div>
+
+                   <div className="min-h-[4rem] mb-6 flex flex-col items-center justify-center">
+                      <p className={`text-xl md:text-2xl font-bold transition-all ${
+                        pokerResult === 'win' ? 'text-green-300 scale-110' : 
+                        pokerResult === 'lose' ? 'text-red-400 scale-110' : 'text-white'
+                      }`}>
+                        {pokerMessage}
+                      </p>
+                      {pokerResult === 'lose' && (
+                         <div className="text-sm text-white/50 mt-1">聖誕老人在竊笑...</div>
+                      )}
+                   </div>
+
+                   {/* 失敗時顯示重試按鈕 */}
+                   {pokerResult === 'lose' && (
+                     <button
+                       onClick={retryPoker}
+                       className="px-8 py-3 rounded-full font-bold text-lg shadow-xl bg-gray-700 hover:bg-gray-600 text-white transition-all transform hover:scale-105 border border-white/20 flex items-center gap-2"
+                     >
+                       <RotateCcw size={18} /> 再抽一次
+                     </button>
+                   )}
+                </div>
+              )}
+
+              {/* STAGE 2: 抽獎機 (獲勝後顯示) */}
+              {gameStage === 'raffle' && (
+                <div className="w-full h-full flex flex-col items-center justify-center animate-fade-in">
+                  <div className="bg-yellow-600/50 rounded-full px-6 py-1 text-yellow-200 text-sm font-bold tracking-wider mb-6 border border-yellow-500/30">
+                     STAGE 2: 幸運大抽獎
+                  </div>
+
+                  <div className="w-full space-y-6 mb-8 relative z-10">
+                    <div className="space-y-1">
+                      <div className="text-green-200 text-xs uppercase tracking-widest font-bold">The Winner Is</div>
+                      <div className={`text-4xl md:text-5xl font-bold transition-all duration-100 ${isSpinning ? 'opacity-70 blur-[1px]' : 'text-yellow-300 scale-110 christmas-shadow'}`}>
+                        {currentParticipant || <span className="text-white/30 text-3xl">?</span>}
+                      </div>
+                    </div>
+                    
+                    <div className="text-red-200 font-serif italic text-lg">獲得</div>
+
+                    <div className="space-y-1">
+                      <div className="text-green-200 text-xs uppercase tracking-widest font-bold">The Prize Is</div>
+                      <div className={`text-3xl md:text-4xl font-bold transition-all duration-100 ${isSpinning ? 'opacity-70 blur-[1px]' : 'text-white christmas-shadow'}`}>
+                        {currentPrize || <span className="text-white/30 text-2xl">?</span>}
+                      </div>
+                    </div>
+
+                    {!isSpinning && currentCode && (
+                      <div className="mt-8 animate-bounce-in">
+                        <div className="bg-yellow-400 text-red-800 rounded-lg p-3 mx-auto max-w-xs shadow-lg transform rotate-1 border-2 border-dashed border-red-800 relative">
+                           <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-red-600 text-white text-xs px-2 py-0.5 rounded-full font-bold">BONUS</div>
+                           <div className="text-xs font-bold mb-1 opacity-75">折扣碼</div>
+                           <div className="flex items-center justify-center gap-2">
+                             <span className="font-mono text-xl font-black tracking-wider">{currentCode}</span>
+                             <button onClick={() => copyToClipboard(currentCode)} className="p-1 hover:bg-red-800/10 rounded-full transition-colors">
+                               {copied ? <Check size={16} className="text-green-700"/> : <Copy size={16}/>}
+                             </button>
+                           </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex gap-4 relative z-10">
+                    {!currentCode ? (
+                      <button
+                        onClick={drawWinner}
+                        disabled={isSpinning}
+                        className={`
+                          px-8 py-3 rounded-full font-bold text-xl shadow-lg transition-all transform hover:scale-105
+                          ${isSpinning ? 'bg-gray-500 cursor-not-allowed' : 'bg-gradient-to-r from-yellow-400 to-yellow-600 text-red-900'}
+                        `}
+                      >
+                        {isSpinning ? '抽獎中...' : '開始抽獎'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={nextChallenger}
+                        className="px-8 py-3 rounded-full font-bold text-xl shadow-lg bg-green-600 hover:bg-green-500 text-white flex items-center gap-2"
+                      >
+                         下一位挑戰者 <Play size={20} fill="currentColor" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+            </div>
+          </div>
+
+          {/* 右側：中獎名單 */}
+          <div className="lg:col-span-3">
+            <div className="card-glass rounded-xl p-4 shadow-xl h-full flex flex-col">
+              <div className="flex items-center justify-between mb-4 text-red-300 border-b border-white/10 pb-2">
+                <div className="flex items-center gap-2">
+                  <PartyPopper size={20} />
+                  <h2 className="font-bold">榮譽榜</h2>
+                </div>
+                <button onClick={resetAll} className="text-white/50 hover:text-white" title="重置">
+                  <RotateCcw size={16} />
+                </button>
+              </div>
+              
+              <div className="flex-1 overflow-y-auto custom-scrollbar space-y-2">
+                {winners.length === 0 ? (
+                  <div className="text-white/30 text-center py-8 text-sm">
+                    目前還沒有人通過挑戰...
+                  </div>
+                ) : (
+                  winners.map((winner, index) => (
+                    <div key={index} className="bg-white/10 rounded-lg p-3 animate-fade-in border border-white/5 hover:bg-white/20 transition-colors">
+                      <div className="flex justify-between items-start">
+                        <span className="font-bold text-yellow-300">{winner.participant}</span>
+                        <Trophy size={14} className="text-yellow-500"/>
+                      </div>
+                      <div className="text-sm text-white/90 mt-1 flex items-center gap-1">
+                        <Gift size={12} className="text-green-400"/>
+                        {winner.prize}
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-xs">
+                         <span className="text-white/50">Code:</span>
+                         <span className="font-mono text-yellow-200 bg-black/20 px-1.5 py-0.5 rounded">{winner.code}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+        </main>
+      </div>
+    </div>
+  );
+}
